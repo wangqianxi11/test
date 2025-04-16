@@ -1,8 +1,8 @@
 <!--
  * @Author: Wang
  * @Date: 2025-04-16 15:18:20
- * @LastEditors: 
- * @LastEditTime: 2025-04-16 16:01:05
+ * @LastEditors: Please set LastEditors
+ * @LastEditTime: 2025-04-16 16:14:56
  * @Description: 请填写简介
 -->
 # 基于Linux的WebServer项目
@@ -78,15 +78,15 @@ make
 ## 压力测试
 使用webbench或者Apache BenchMark
 ### 安装和使用Apache BenchMark
-‘‘‘
+```
 sudo apt-get install apache2-utils
 ab -n 1000 -c 1000 http://ip:port/
-’’’
+```
 ### 使用Webbench
-‘‘‘
+```
 ./webbench-1.5/webbench -c 100 -t 10 http://ip:port/
 ./webbench-1.5/webbench -c 1000 -t 10 http://ip:port/
-’’’
+```
 QPS只能达到1000+
 
 ## 致谢
