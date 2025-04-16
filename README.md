@@ -2,7 +2,7 @@
  * @Author: Wang
  * @Date: 2025-04-16 15:18:20
  * @LastEditors: Please set LastEditors
- * @LastEditTime: 2025-04-16 16:22:42
+ * @LastEditTime: 2025-04-16 16:34:04
  * @Description: 请填写简介
 -->
 # 基于Linux的WebServer项目
@@ -100,3 +100,6 @@ https://github.com/markparticle/WebServer.git
 * 将解析HTTP请求的状态机模式从按行分成两部分，读取请求头和请求体，请求头仍保持按行读取不变，请求体则一次读取完毕所有的Content-Length长度，适合多文本格式上传
 * 在response中增加了响应json格式，而不是只响应html文件；包括upload和delete，其中upload会处理请求体，响应upload时将请求体作为写入到本地文件夹中，响应delete时，从本地文件夹删除与文件名相同的文件
 * 修复了HTTP长连接+缓冲区机制下的读取不完全问题。在文件上传功能时，发现从socket中读取数据经常只能读取header，读不了body。修正httpconn::process()逻辑和WebServer::OnRead_()，判断读取不完整时会继续读取。但是会造成性能下降。
+
+## TODO
+* 将上传的文件与原来的文件能在picture.html按照个数战术
