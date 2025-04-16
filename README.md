@@ -2,7 +2,7 @@
  * @Author: Wang
  * @Date: 2025-04-16 15:18:20
  * @LastEditors: Please set LastEditors
- * @LastEditTime: 2025-04-16 16:14:56
+ * @LastEditTime: 2025-04-16 16:22:42
  * @Description: 请填写简介
 -->
 # 基于Linux的WebServer项目
@@ -25,33 +25,38 @@
 ## 目录树
 ```
 .
-├── code           源代码
-│   ├── buffer
-│   ├── config
-│   ├── http
-│   ├── log
-│   ├── timer
-│   ├── pool
-│   ├── server
-│   └── main.cpp
-├── test           单元测试
-│   ├── Makefile
-│   └── test.cpp
-├── resources      静态资源
-│   ├── index.html
-│   ├── image
-│   ├── video
-│   ├── js
-│   └── css
-├── bin            可执行文件
+├── bin
+│   ├── log
+│   ├── resources
+│   ├── upload
 │   └── server
-├── log            日志文件
-├── webbench-1.5   压力测试
-├── build          
+├── build
 │   └── Makefile
-├── Makefile
+├── code
+│   ├── buffer
+│   ├── config
+│   ├── http
+│   ├── log
+│   ├── pool
+│   ├── server
+│   ├── timer
+│   ├── main.cpp
+│   └── readme.md
+├── readme.assest
+│   └── 压力测试.png
+├── webbench-1.5
+│   ├── Makefile
+│   ├── socket.c
+│   ├── tags
+│   ├── webbench
+│   ├── webbench.c
+│   ├── webbench.o
+│   └── webbench_report.txt
 ├── LICENSE
-└── readme.md
+├── Makefile
+├── readme.md
+└── README.md
+
 ```
 ## 项目启动
 需要先配置好对应的数据库
