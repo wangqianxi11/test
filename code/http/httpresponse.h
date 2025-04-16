@@ -11,16 +11,16 @@
 #include <unistd.h>      // close
 #include <sys/stat.h>    // stat
 #include <sys/mman.h>    // mmap, munmap
-
+#include <nlohmann/json.hpp> 
 #include "../buffer/buffer.h"
 #include "../log/log.h"
-
+#include "httprequest.h"
 class HttpResponse {
 public:
     HttpResponse();
     ~HttpResponse();
 
-    void Init(const std::string& srcDir, std::string& path, bool isKeepAlive = false, int code = -1);
+    void Init(const std::string& srcDir, std::string& path, std::string& body, std::unordered_map<std::string,std::string>&header,bool isKeepAlive = false, int code = -1);
     void MakeResponse(Buffer& buff);
     void UnmapFile();
     char* File();
@@ -30,10 +30,11 @@ public:
 
 private:
     void AddStateLine_(Buffer &buff);
-    void AddHeader_(Buffer &buff);
+    void AddHeader_(Buffer &buff,bool isJsonResponse);
     void AddContent_(Buffer &buff);
-
+    void AddJsonContent_(Buffer& buff);
     void ErrorHtml_();
+    void getFileList(const std::string& dirPath, std::vector<std::string>& fileList);
     std::string GetFileType_();
 
     int code_;
@@ -41,6 +42,8 @@ private:
 
     std::string path_;
     std::string srcDir_;
+    std::string body_;
+    std::unordered_map<std::string,std::string> header_;
     
     char* mmFile_; 
     struct stat mmFileStat_;

@@ -10,12 +10,16 @@
 #include <iostream>
 #include <unistd.h>  // write
 #include <sys/uio.h> //readv
+#include <sys/socket.h>
 #include <vector> //readv
 #include <atomic>
 #include <assert.h>
+#include <iostream>
+using namespace std;
+#include<fstream>
 class Buffer {
 public:
-    Buffer(int initBuffSize = 1024);
+    Buffer(int initBuffSize = 204800);
     ~Buffer() = default;
 
     size_t WritableBytes() const;       
@@ -39,6 +43,7 @@ public:
     void Append(const char* str, size_t len);
     void Append(const void* data, size_t len);
     void Append(const Buffer& buff);
+    void MakeSpace_(size_t len);
 
     ssize_t ReadFd(int fd, int* Errno);
     ssize_t WriteFd(int fd, int* Errno);
@@ -46,7 +51,6 @@ public:
 private:
     char* BeginPtr_();
     const char* BeginPtr_() const;
-    void MakeSpace_(size_t len);
 
     std::vector<char> buffer_;
     std::atomic<std::size_t> readPos_;

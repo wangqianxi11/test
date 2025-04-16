@@ -8,9 +8,11 @@
 Buffer::Buffer(int initBuffSize) : buffer_(initBuffSize), readPos_(0), writePos_(0) {}
 
 size_t Buffer::ReadableBytes() const {
+    // 返回可读的字节数
     return writePos_ - readPos_;
 }
 size_t Buffer::WritableBytes() const {
+    // 返回可写的字节数
     return buffer_.size() - writePos_;
 }
 
@@ -23,12 +25,11 @@ const char* Buffer::Peek() const {
 }
 
 void Buffer::Retrieve(size_t len) {
-    assert(len <= ReadableBytes());
+    // 移动读取位置指针，表示已经处理了该缓冲区
     readPos_ += len;
 }
 
 void Buffer::RetrieveUntil(const char* end) {
-    assert(Peek() <= end );
     Retrieve(end - Peek());
 }
 
@@ -61,12 +62,10 @@ void Buffer::Append(const std::string& str) {
 }
 
 void Buffer::Append(const void* data, size_t len) {
-    assert(data);
     Append(static_cast<const char*>(data), len);
 }
 
 void Buffer::Append(const char* str, size_t len) {
-    assert(str);
     EnsureWriteable(len);
     std::copy(str, str + len, BeginWrite());
     HasWritten(len);
@@ -80,31 +79,87 @@ void Buffer::EnsureWriteable(size_t len) {
     if(WritableBytes() < len) {
         MakeSpace_(len);
     }
-    assert(WritableBytes() >= len);
 }
 
-ssize_t Buffer::ReadFd(int fd, int* saveErrno) {
-    char buff[65535];
-    struct iovec iov[2];
-    const size_t writable = WritableBytes();
-    /* 分散读， 保证数据全部读完 */
-    iov[0].iov_base = BeginPtr_() + writePos_;
-    iov[0].iov_len = writable;
-    iov[1].iov_base = buff;
-    iov[1].iov_len = sizeof(buff);
+// ssize_t Buffer::ReadFd(int fd, int* saveErrno) {
+//     char extrabuf[65536]; // 临时缓冲区
+//     struct iovec iov[2];
+//     const size_t writable = WritableBytes();
 
-    const ssize_t len = readv(fd, iov, 2);
-    if(len < 0) {
-        *saveErrno = errno;
-    }
-    else if(static_cast<size_t>(len) <= writable) {
+//     iov[0].iov_base = BeginPtr_() + writePos_;
+//     iov[0].iov_len = writable;
+//     iov[1].iov_base = extrabuf;
+//     iov[1].iov_len = sizeof(extrabuf);
+
+//     // 先尝试读取数据
+//     ssize_t len = readv(fd, iov, 2);
+//     if (len < 0) {
+//         *saveErrno = errno;
+//         return -1;
+//     } 
+//     else if (static_cast<size_t>(len) <= writable) {
+//         writePos_ += len;
+//     } 
+//     else {
+//         writePos_ = buffer_.size();
+//         Append(extrabuf, len - writable);
+//     }
+//     return len;
+// }
+
+
+// ssize_t Buffer::ReadFd(int fd, int* saveErrno) {
+//     // 确保至少有64KB可用空间
+//     MakeSpace_(65536);
+    
+//     struct iovec iov;
+//     iov.iov_base = BeginPtr_() + writePos_;
+//     iov.iov_len = WritableBytes();
+//     std::cout<<"buff中剩余的空间:"<<WritableBytes()<<endl;
+//     ssize_t len = readv(fd, &iov, 1);
+//     if (len < 0) {
+//         *saveErrno = errno;
+//         return -1;
+//     }
+//     writePos_ += len;
+//     std::cout<<"ReadFd读取了"<<len<<"长度"<<endl;
+//     return len;
+// }
+
+ssize_t Buffer::ReadFd(int fd, int* saveErrno) {
+    // 确保有足够空间来读取数据，至少 64KB
+    MakeSpace_(65536);
+    
+    struct iovec iov;
+    iov.iov_base = BeginPtr_() + writePos_;
+    iov.iov_len = WritableBytes();
+    std::cout<<"buff中剩余的空间:"<<WritableBytes()<<endl;
+    ssize_t totalRead = 0;
+    
+    // 循环读取数据，直到没有更多数据可读
+    while (iov.iov_len > 0) {
+        ssize_t len = readv(fd, &iov, 1);
+        
+        if (len < 0) {
+            *saveErrno = errno;
+            return totalRead > 0 ? totalRead : -1; // 读取过的部分返回
+            std::cout << "len<0 ReadFd读取了" << totalRead << "长度" << std::endl;
+        } else if (len == 0) {
+            // 文件结束
+            break;
+        }
+        
+        // 更新写入位置，记录读取的总字节数
         writePos_ += len;
+        totalRead += len;
+        
+        // 继续尝试读取剩余部分
+        iov.iov_base = BeginPtr_() + writePos_;
+        iov.iov_len = WritableBytes();
+        
     }
-    else {
-        writePos_ = buffer_.size();
-        Append(buff, len - writable);
-    }
-    return len;
+    std::cout << "ReadFd读取了" << totalRead << "长度" << std::endl;
+    return totalRead;
 }
 
 ssize_t Buffer::WriteFd(int fd, int* saveErrno) {
@@ -127,6 +182,8 @@ const char* Buffer::BeginPtr_() const {
 }
 
 void Buffer::MakeSpace_(size_t len) {
+    // 确保缓冲区有足够的字节来写
+    // 一是缓冲区内是否有足够的空间，二是当空间不足时如何扩展缓冲区或移动数据
     if(WritableBytes() + PrependableBytes() < len) {
         buffer_.resize(writePos_ + len + 1);
     } 
@@ -135,6 +192,5 @@ void Buffer::MakeSpace_(size_t len) {
         std::copy(BeginPtr_() + readPos_, BeginPtr_() + writePos_, BeginPtr_());
         readPos_ = 0;
         writePos_ = readPos_ + readable;
-        assert(readable == ReadableBytes());
     }
 }

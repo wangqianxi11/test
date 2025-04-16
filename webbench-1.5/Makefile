@@ -12,11 +12,11 @@ tags:  *.c
 	-ctags *.c
 
 install: webbench
-	install -s webbench $(DESTDIR)$(PREFIX)/bin	
-	install -m 644 webbench.1 $(DESTDIR)$(PREFIX)/man/man1	
-	install -d $(DESTDIR)$(PREFIX)/share/doc/webbench
-	install -m 644 debian/copyright $(DESTDIR)$(PREFIX)/share/doc/webbench
-	install -m 644 debian/changelog $(DESTDIR)$(PREFIX)/share/doc/webbench
+	sudo install -s webbench $(DESTDIR)$(PREFIX)/bin	
+	sudo install -m 644 webbench $(DESTDIR)$(PREFIX)/man/man1	
+	sudo install -d $(DESTDIR)$(PREFIX)/share/doc/webbench
+#	sudo install -m 644 debian/copyright $(DESTDIR)$(PREFIX)/share/doc/webbench
+#	sudo install -m 644 debian/changelog $(DESTDIR)$(PREFIX)/share/doc/webbench
 
 webbench: webbench.o Makefile
 	$(CC) $(CFLAGS) $(LDFLAGS) -o webbench webbench.o $(LIBS) 

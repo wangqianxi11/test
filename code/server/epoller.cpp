@@ -15,6 +15,14 @@ Epoller::~Epoller() {
 }
 
 bool Epoller::AddFd(int fd, uint32_t events) {
+    /*
+    @description: 向epoll实例中添加新的监听对象，并指定监听的事件（
+                    EPOLLIN：可读
+                    EPOLLOUT：可写
+                    EPOLLET：边缘触发模式
+                    EPOLLONESHOT：只监听一次，之后要手动重新激活（常用于多线程））
+    @return: 返回bool值，判断是否添加成功
+    */
     if(fd < 0) return false;
     epoll_event ev = {0};
     ev.data.fd = fd;
@@ -41,11 +49,9 @@ int Epoller::Wait(int timeoutMs) {
 }
 
 int Epoller::GetEventFd(size_t i) const {
-    assert(i < events_.size() && i >= 0);
     return events_[i].data.fd;
 }
 
 uint32_t Epoller::GetEvents(size_t i) const {
-    assert(i < events_.size() && i >= 0);
     return events_[i].events;
 }

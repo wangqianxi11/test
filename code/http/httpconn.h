@@ -11,7 +11,8 @@
 #include <sys/uio.h>     // readv/writev
 #include <arpa/inet.h>   // sockaddr_in
 #include <stdlib.h>      // atoi()
-#include <errno.h>      
+#include <errno.h>     
+#include <fstream> 
 
 #include "../log/log.h"
 #include "../pool/sqlconnRAII.h"
@@ -21,6 +22,11 @@
 
 class HttpConn {
 public:
+    enum  PROCESS_STATE {
+    AGAIN,   // 数据还不够
+    FINISH,  // 处理完成，准备写响应
+    ERROR    // 请求格式错误
+    };
     HttpConn();
 
     ~HttpConn();
@@ -41,7 +47,7 @@ public:
     
     sockaddr_in GetAddr() const;
     
-    bool process();
+    PROCESS_STATE process();
 
     int ToWriteBytes() { 
         return iov_[0].iov_len + iov_[1].iov_len; 

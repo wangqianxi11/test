@@ -15,10 +15,11 @@
  *    3 - internal error, fork failed
  * 
  */ 
+#define _POSIX_C_SOURCE 199309L  // 或更高版本
 #include "socket.c"
 #include <unistd.h>
 #include <sys/param.h>
-#include <rpc/types.h>
+#include <sys/types.h>
 #include <getopt.h>
 #include <strings.h>
 #include <time.h>

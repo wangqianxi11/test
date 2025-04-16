@@ -8,25 +8,25 @@
 
 using namespace std;
 
+// WebServer构造函数
 WebServer::WebServer(
-            int port, int trigMode, int timeoutMS, bool OptLinger,
-            int sqlPort, const char* sqlUser, const  char* sqlPwd,
-            const char* dbName, int connPoolNum, int threadNum,
-            bool openLog, int logLevel, int logQueSize):
-            port_(port), openLinger_(OptLinger), timeoutMS_(timeoutMS), isClose_(false),
-            timer_(new HeapTimer()), threadpool_(new ThreadPool(threadNum)), epoller_(new Epoller())
+            int port, int trigMode, int timeoutMS, bool OptLinger, // http连接端口号、触发模式、超时时间、是否优雅关闭
+            int sqlPort, const char* sqlUser, const  char* sqlPwd, // 数据库端口、数据库用户名、数据库密码
+            const char* dbName, int connPoolNum, int threadNum, // 数据库名称、数据库连接池数目、线程池数目
+            bool openLog, int logLevel, int logQueSize): // 是否打开日志、日志级别、日志队列大小
+            port_(port), openLinger_(OptLinger), timeoutMS_(timeoutMS), isClose_(false), // 参数赋给成员变量
+            timer_(new HeapTimer()), threadpool_(new ThreadPool(threadNum)), epoller_(new Epoller()) // 创建定时器、线程池、epoller实例
     {
     srcDir_ = getcwd(nullptr, 256);
-    assert(srcDir_);
-    strncat(srcDir_, "/resources/", 16);
+    strncat(srcDir_, "/resources", 16); // 设置http静态资源的目录
     HttpConn::userCount = 0;
     HttpConn::srcDir = srcDir_;
-    SqlConnPool::Instance()->Init("localhost", sqlPort, sqlUser, sqlPwd, dbName, connPoolNum);
-
-    InitEventMode_(trigMode);
-    if(!InitSocket_()) { isClose_ = true;}
+    SqlConnPool::Instance()->Init("localhost", sqlPort, sqlUser, sqlPwd, dbName, connPoolNum); // 初始化单例模式的数据库连接池
+    InitEventMode_(trigMode); // 初始化连接和监听的事件模式(LT/ET)
+    if(!InitSocket_()) { isClose_ = true;} // 套接字初始化
 
     if(openLog) {
+        // 初始化日志系统
         Log::Instance()->init(logLevel, "./log", ".log", logQueSize);
         if(isClose_) { LOG_ERROR("========== Server init error!=========="); }
         else {
@@ -42,19 +42,21 @@ WebServer::WebServer(
     }
 }
 
+// WebServer的析构函数
 WebServer::~WebServer() {
-    close(listenFd_);
-    isClose_ = true;
+    close(listenFd_); // 关闭监听socket
+    isClose_ = true; // 连接标志位设为true，表示关闭连接
     free(srcDir_);
-    SqlConnPool::Instance()->ClosePool();
+    SqlConnPool::Instance()->ClosePool(); // 关闭数据库连接池
 }
 
+// 初始化WebServer事件触发模式
 void WebServer::InitEventMode_(int trigMode) {
-    listenEvent_ = EPOLLRDHUP;
-    connEvent_ = EPOLLONESHOT | EPOLLRDHUP;
+    listenEvent_ = EPOLLRDHUP; // 监听事件，默认设置，用于检测对端关闭连接
+    connEvent_ = EPOLLONESHOT | EPOLLRDHUP; // 连接事件：保证一个socket连接在任意时刻只被一个线程处理|检测对端关闭
     switch (trigMode)
     {
-    case 0:
+    case 0: // 默认的LT模式
         break;
     case 1:
         connEvent_ |= EPOLLET;
@@ -71,35 +73,33 @@ void WebServer::InitEventMode_(int trigMode) {
         connEvent_ |= EPOLLET;
         break;
     }
-    HttpConn::isET = (connEvent_ & EPOLLET);
+    HttpConn::isET = (connEvent_ & EPOLLET); // 根据连接事件是否有EPOLLET，设置http连接是否使用ET模式
 }
 
 void WebServer::Start() {
     int timeMS = -1;  /* epoll wait timeout == -1 无事件将阻塞 */
     if(!isClose_) { LOG_INFO("========== Server start =========="); }
-    while(!isClose_) {
+    while(!isClose_) { // 典型的reactor模式，主循环直到isClose_为true结束
         if(timeoutMS_ > 0) {
-            timeMS = timer_->GetNextTick();
+            timeMS = timer_->GetNextTick(); // 计算下一次定时任务时长
         }
-        int eventCnt = epoller_->Wait(timeMS);
+        int eventCnt = epoller_->Wait(timeMS); // 等待I/O事件发生，返回事件数量，epoll_wait函数
         for(int i = 0; i < eventCnt; i++) {
             /* 处理事件 */
-            int fd = epoller_->GetEventFd(i);
-            uint32_t events = epoller_->GetEvents(i);
+            int fd = epoller_->GetEventFd(i); // 获取事件描述符
+            uint32_t events = epoller_->GetEvents(i); // 获取事件
             if(fd == listenFd_) {
                 DealListen_();
             }
             else if(events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)) {
-                assert(users_.count(fd) > 0);
                 CloseConn_(&users_[fd]);
             }
             else if(events & EPOLLIN) {
-                assert(users_.count(fd) > 0);
-                DealRead_(&users_[fd]);
+                DealRead_(&users_[fd]); // 客户端发来请求，读取并解析
             }
             else if(events & EPOLLOUT) {
-                assert(users_.count(fd) > 0);
-                DealWrite_(&users_[fd]);
+
+                DealWrite_(&users_[fd]); // 服务端发送响应，
             } else {
                 LOG_ERROR("Unexpected event");
             }
@@ -108,7 +108,6 @@ void WebServer::Start() {
 }
 
 void WebServer::SendError_(int fd, const char*info) {
-    assert(fd > 0);
     int ret = send(fd, info, strlen(info), 0);
     if(ret < 0) {
         LOG_WARN("send error to client[%d] error!", fd);
@@ -117,14 +116,22 @@ void WebServer::SendError_(int fd, const char*info) {
 }
 
 void WebServer::CloseConn_(HttpConn* client) {
-    assert(client);
+
     LOG_INFO("Client[%d] quit!", client->GetFd());
     epoller_->DelFd(client->GetFd());
     client->Close();
 }
 
 void WebServer::AddClient_(int fd, sockaddr_in addr) {
-    assert(fd > 0);
+    /*
+    @description:
+        初始化用户状态，
+        设置超时关闭
+        注册epoll中监听读事件
+        设置非阻塞
+        写日志
+    */
+
     users_[fd].init(fd, addr);
     if(timeoutMS_ > 0) {
         timer_->add(fd, timeoutMS_, std::bind(&WebServer::CloseConn_, this, &users_[fd]));
@@ -135,12 +142,16 @@ void WebServer::AddClient_(int fd, sockaddr_in addr) {
 }
 
 void WebServer::DealListen_() {
+    /*
+    @description: 接受新连接并在epoll中注册监听读事件
+    流程：客户端accept---> AddClient_ 
+    */
     struct sockaddr_in addr;
-    socklen_t len = sizeof(addr);
+    socklen_t len = sizeof(addr); // 接收客户端的地址信息
     do {
-        int fd = accept(listenFd_, (struct sockaddr *)&addr, &len);
+        int fd = accept(listenFd_, (struct sockaddr *)&addr, &len); // 接收新的连接，listenFd_是服务器监听的socket fd，返回的fd是客户端连接的socket fd
         if(fd <= 0) { return;}
-        else if(HttpConn::userCount >= MAX_FD) {
+        else if(HttpConn::userCount >= MAX_FD) { // 设置最大连接数
             SendError_(fd, "Server busy!");
             LOG_WARN("Clients is full!");
             return;
@@ -149,45 +160,68 @@ void WebServer::DealListen_() {
     } while(listenEvent_ & EPOLLET);
 }
 
+// 处理读事件
 void WebServer::DealRead_(HttpConn* client) {
-    assert(client);
     ExtentTime_(client);
+    // 提交读任务到线程池，使用bind将Onread_方法和当前对象和客户端连接绑定
+    // 交给线程池异步处理，避免主线程阻塞
     threadpool_->AddTask(std::bind(&WebServer::OnRead_, this, client));
 }
 
+// 处理写事件
 void WebServer::DealWrite_(HttpConn* client) {
-    assert(client);
     ExtentTime_(client);
+    // 提交写任务到线程池，使用bind将Onread_方法和当前对象和客户端连接绑定
+    // 交给线程池异步处理，避免主线程阻塞
     threadpool_->AddTask(std::bind(&WebServer::OnWrite_, this, client));
 }
 
 void WebServer::ExtentTime_(HttpConn* client) {
-    assert(client);
+    // 延长客户端连接超时的方法，客户端有活动时刷新超时计时器
     if(timeoutMS_ > 0) { timer_->adjust(client->GetFd(), timeoutMS_); }
 }
 
 void WebServer::OnRead_(HttpConn* client) {
-    assert(client);
+    /*
+    从客户端socket读取
+    如果读取失败或连接断开，关闭连接
+    读取成功就进一步处理OnProcess
+    */
+    
     int ret = -1;
     int readErrno = 0;
     ret = client->read(&readErrno);
+    cout<<"从客户端读取了"<<ret<<"字节"<<endl;
     if(ret <= 0 && readErrno != EAGAIN) {
         CloseConn_(client);
         return;
     }
+
     OnProcess(client);
 }
 
 void WebServer::OnProcess(HttpConn* client) {
-    if(client->process()) {
-        epoller_->ModFd(client->GetFd(), connEvent_ | EPOLLOUT);
-    } else {
-        epoller_->ModFd(client->GetFd(), connEvent_ | EPOLLIN);
+    // if(client->process()) {
+    //     epoller_->ModFd(client->GetFd(), connEvent_ | EPOLLOUT);
+    // } else {
+    //     epoller_->ModFd(client->GetFd(), connEvent_ | EPOLLIN);
+    // }
+
+    HttpConn:: PROCESS_STATE state = client->process();
+    int fd = client->GetFd();
+
+    switch (state) {
+        case HttpConn::PROCESS_STATE::FINISH:
+        case HttpConn::PROCESS_STATE::ERROR:
+            epoller_->ModFd(fd, connEvent_ | EPOLLOUT); // 不论是正常响应还是400，都要写回
+            break;
+        case HttpConn::PROCESS_STATE::AGAIN:
+            epoller_->ModFd(fd, connEvent_ | EPOLLIN); // 数据还不够，继续读
+            break;
     }
 }
 
 void WebServer::OnWrite_(HttpConn* client) {
-    assert(client);
     int ret = -1;
     int writeErrno = 0;
     ret = client->write(&writeErrno);
@@ -212,13 +246,15 @@ void WebServer::OnWrite_(HttpConn* client) {
 bool WebServer::InitSocket_() {
     int ret;
     struct sockaddr_in addr;
+    // 端口号有效验证
     if(port_ > 65535 || port_ < 1024) {
         LOG_ERROR("Port:%d error!",  port_);
         return false;
     }
-    addr.sin_family = AF_INET;
+    // 地址结构初始化
+    addr.sin_family = AF_INET; // IPv4协议
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr.sin_port = htons(port_);
+    addr.sin_port = htons(port_); // 设置监听端口
     struct linger optLinger = { 0 };
     if(openLinger_) {
         /* 优雅关闭: 直到所剩数据发送完毕或超时 */
@@ -226,13 +262,14 @@ bool WebServer::InitSocket_() {
         optLinger.l_linger = 1;
     }
 
-    listenFd_ = socket(AF_INET, SOCK_STREAM, 0);
+    listenFd_ = socket(AF_INET, SOCK_STREAM, 0); // 创建IPv4套接字
     if(listenFd_ < 0) {
         LOG_ERROR("Create socket error!", port_);
         return false;
     }
 
-    ret = setsockopt(listenFd_, SOL_SOCKET, SO_LINGER, &optLinger, sizeof(optLinger));
+    // 设置套接字选项
+    ret = setsockopt(listenFd_, SOL_SOCKET, SO_LINGER, &optLinger, sizeof(optLinger)); 
     if(ret < 0) {
         close(listenFd_);
         LOG_ERROR("Init linger error!", port_);
@@ -249,6 +286,7 @@ bool WebServer::InitSocket_() {
         return false;
     }
 
+    // 绑定
     ret = bind(listenFd_, (struct sockaddr *)&addr, sizeof(addr));
     if(ret < 0) {
         LOG_ERROR("Bind Port:%d error!", port_);
@@ -256,25 +294,27 @@ bool WebServer::InitSocket_() {
         return false;
     }
 
+    // 监听
     ret = listen(listenFd_, 6);
     if(ret < 0) {
         LOG_ERROR("Listen port:%d error!", port_);
         close(listenFd_);
         return false;
     }
+    // 将套接字注册到epoll实例中，
     ret = epoller_->AddFd(listenFd_,  listenEvent_ | EPOLLIN);
     if(ret == 0) {
         LOG_ERROR("Add listen error!");
         close(listenFd_);
         return false;
     }
+    // 设置非阻塞模式
     SetFdNonblock(listenFd_);
     LOG_INFO("Server port:%d", port_);
     return true;
 }
 
 int WebServer::SetFdNonblock(int fd) {
-    assert(fd > 0);
     return fcntl(fd, F_SETFL, fcntl(fd, F_GETFD, 0) | O_NONBLOCK);
 }
 

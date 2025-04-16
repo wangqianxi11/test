@@ -1,3 +1,10 @@
+/*
+ * @Author: Wang
+ * @Date: 2025-02-17 15:44:44
+ * @LastEditors: 
+ * @LastEditTime: 2025-04-15 16:29:22
+ * @Description: 请填写简介
+ */
 /* $Id: socket.c 1.1 1995/01/01 07:11:14 cthuang Exp $
  *
  * This module has been modified by Radim Kolar for OS/2 emx
@@ -44,7 +51,7 @@ int Socket(const char *host, int clientPort)
         hp = gethostbyname(host);
         if (hp == NULL)
             return -1;
-        memcpy(&ad.sin_addr, hp->h_addr, hp->h_length);
+        memcpy(&ad.sin_addr, hp->h_addr_list, hp->h_length);
     }
     ad.sin_port = htons(clientPort);
 
