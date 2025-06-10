@@ -60,36 +60,6 @@ int HttpConn::GetPort() const {
     return addr_.sin_port;
 }
 
-// ssize_t HttpConn::read(int* saveErrno) {
-//     ssize_t len = -1;
-//     do {
-//         len = readBuff_.ReadFd(fd_, saveErrno);
-//         if (len <= 0) {
-//             break;
-//         }
-//     } while (isET);
-//     std::cout<<"http连接读取了"<<len<<"长度"<<endl;
-//     return len; //返回读取的长度
-// }
-
-// ssize_t HttpConn::read(int* saveErrno) {
-//     ssize_t len = -1;
-//     ssize_t totalLen = 0;
-    
-//     do {
-//         len = readBuff_.ReadFd(fd_, saveErrno);
-//         if (len > 0) {
-//             totalLen += len;
-//         }
-//     } while (isET);  // ET模式下持续读取直到无法读取
-    
-//     if (totalLen > 0) {
-//         std::cout << "http连接读取了" << totalLen << "长度" << endl;
-//         return totalLen;
-//     }
-    
-//     return totalLen; // 只有没有任何成功读取时才返回错误
-// }
 
 ssize_t HttpConn::read(int* saveErrno) {
     ssize_t len = -1;
@@ -142,6 +112,7 @@ ssize_t HttpConn::write(int* saveErrno) {
     return len;
 }
 
+
 HttpConn::PROCESS_STATE HttpConn::process() {
     int fd = GetFd(); // 获取客户端socket，fd
     // request_.Init(); // HTTP请求初始化
@@ -159,13 +130,11 @@ HttpConn::PROCESS_STATE HttpConn::process() {
     }
     if(result == HttpRequest::PARSE_STATE::ERROR) {
         response_.Init(srcDir, request_.path(), request_.body(), request_.header(), false, 400);
-    } else if(result == HttpRequest::PARSE_STATE::FINISH) {
-        LOG_INFO("请求路径：%s", request_.path().c_str());
-        response_.Init(srcDir, request_.path(), request_.body(), request_.header(), request_.IsKeepAlive(), 200);
+        return FINISH;
     }
-    LOG_INFO("process() 返回状态: %d", static_cast<int>(result));
+    RouteRequest();  // 新增函数：分发逻辑处理
     // 构造http响应
-    response_.MakeResponse(writeBuff_);
+    response_.MakeResponse(writeBuff_,isJsonResponse);
     /* 响应头 */
     iov_[0].iov_base = const_cast<char*>(writeBuff_.Peek()); 
     iov_[0].iov_len = writeBuff_.ReadableBytes(); // 响应头和长度
@@ -178,7 +147,101 @@ HttpConn::PROCESS_STATE HttpConn::process() {
         iovCnt_ = 2; // 如果有文件，则同时发送响应头和文件
     }
     LOG_INFO("filesize:%d, %d  to %d", response_.FileLen() , iovCnt_, ToWriteBytes());
-    // ✅ 当前请求处理完后，准备下一次请求，清空状态
+    //  当前请求处理完后，准备下一次请求，清空状态
     request_.Init();
     return FINISH;
 }
+
+void HttpConn::RouteRequest() {
+    const auto& method = request_.method();
+    const auto& path = request_.path();
+    cout<<"method:"<<method.c_str()<<endl;
+    cout<<"path:"<<path.c_str()<<endl;
+    if (method == "GET") {
+        if (path.find("/showlist") != std::string::npos) {
+            std::string jsonStr = GetFileListJson("./resources/images");
+            response_.SetJsonResponse(jsonStr);  // 自定义设置 JSON 响应体
+            isJsonResponse = true;
+        } else {
+            response_.Init(srcDir, request_.path(), request_.body(), request_.header(), request_.IsKeepAlive(), 200);
+        }
+    } else if (method == "POST") {
+        if (path.find("/login") == 0 || path.find("/register") == 0) {
+            HandleUserAuth();  // 设置 path_ 和 code_
+            isJsonResponse = false;
+        } else if (path.find("/upload") == 0) {
+            HandleUpload();  // 处理上传
+            isJsonResponse = true;
+        }
+    } else if (method == "DELETE" && path.find("/delete") == 0) {
+        HandleDelete();  // 设置删除路径
+        isJsonResponse = true;
+    } else {
+        response_.Init(srcDir, request_.path(), request_.body(), request_.header(), false, 400);
+    }
+}
+
+
+void HttpConn::HandleUserAuth() {
+    cout<<"开始处理验证和注册任务...."<<endl;
+    bool isLogin = (request_.path().find("/login") == 0);
+    const std::string& username = request_.GetPost("username");
+    const std::string& password = request_.GetPost("password");
+    cout<<"username:"<<username.c_str()<<endl;
+    cout<<"password:"<<password.c_str()<<endl;
+
+    int userID;
+    if (UserService::Verify(username, password, isLogin, userID)) {
+        request_.SetUserID(userID);  // 记录当前用户ID，后续文件上传等可用
+        request_.path() = "/welcome.html";  // 覆盖跳转页面
+    } else {
+        request_.path() = "/error.html";
+    }
+
+    response_.Init(srcDir, request_.path(), request_.body(), request_.header(), request_.IsKeepAlive(), 200);
+}
+
+void HttpConn::HandleUpload() {
+    UploadedFile file;
+    if (request_.ParseMultipartFormData(request_.header()["Content-Type"], request_.body(), file)) {
+        if (UploadService::SaveUploadedFile(file, request_.GetUserID())) {
+            response_.Init(srcDir, request_.path(), request_.body(), request_.header(), request_.IsKeepAlive(), 200);
+        } else {
+            response_.Init(srcDir, request_.path(), request_.body(), request_.header(), false, 400);
+        }
+    } else {
+        response_.Init(srcDir, request_.path(), request_.body(), request_.header(), false, 400);
+    }
+}
+
+void HttpConn::HandleDelete() {
+    std::string filename = request_.path().substr(strlen("/delete/"));
+    bool ok = UploadService::DeleteFile(filename, request_.GetUserID());
+
+    if (ok) {
+        response_.Init(srcDir, request_.path(), request_.body(), request_.header(), request_.IsKeepAlive(), 200);
+    } else {
+        response_.Init(srcDir, request_.path(), request_.body(), request_.header(), false, 400);
+    }
+}
+
+string HttpConn::GetFileListJson(const std::string& dirPath) {
+    vector<std::string> files;
+    DIR* dir = opendir(dirPath.c_str());
+    struct dirent* ent;
+
+    if (dir != nullptr) {
+        while ((ent = readdir(dir)) != nullptr) {
+            std::string name = ent->d_name;
+            if (name != "." && name != ".." && name != ".DS_Store") {
+                files.push_back(name);
+            }
+        }
+        closedir(dir);
+    }
+
+    // 转为 JSON 数组
+    nlohmann::json j = files;
+    return j.dump();  // 返回 JSON 字符串
+}
+

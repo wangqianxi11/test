@@ -2,7 +2,7 @@
  * @Author: Wang
  * @Date: 2025-04-16 15:18:20
  * @LastEditors: Please set LastEditors
- * @LastEditTime: 2025-04-16 16:34:04
+ * @LastEditTime: 2025-06-10 21:06:59
  * @Description: 请填写简介
 -->
 # 基于Linux的WebServer项目
@@ -12,10 +12,17 @@
 子线程处理业务逻辑
 * HTTP 协议处理：基于正则表达式与状态机解析HTTP请求报文，支持静态文
 件（HTML）响应与多格式文件上传
-* 定时器优化：设计小根堆定时器主动剔除超时非活动连接，优化资源利用率
-* 日志系统：利用单例模式与阻塞队列实现异步的日志系统，支持运行状态记录
 * 数据库：RAII机制实现了数据库连接池，减少数据库连接建立与关闭的开销，
-实现了用户注册登录功能
+实现了用户注册登录功能，此外，将上传的文件与数据库相关联，并在页面中能动态刷新上传的文件信息
+
+
+## 功能显示
+### 主页面显示
+![alt text](index.png)
+### 登录界面
+![alt text](login.png)
+### 上传界面
+![alt text](upload.png)
 
 ## 环境要求
 * Linux
@@ -24,12 +31,11 @@
 
 ## 目录树
 ```
-.
 ├── bin
 │   ├── log
 │   ├── resources
-│   ├── upload
-│   └── server
+│   ├── server
+│   └── upload
 ├── build
 │   └── Makefile
 ├── code
@@ -37,25 +43,25 @@
 │   ├── config
 │   ├── http
 │   ├── log
-│   ├── pool
-│   ├── server
-│   ├── timer
 │   ├── main.cpp
-│   └── readme.md
-├── readme.assest
-│   └── 压力测试.png
-├── webbench-1.5
-│   ├── Makefile
-│   ├── socket.c
-│   ├── tags
-│   ├── webbench
-│   ├── webbench.c
-│   ├── webbench.o
-│   └── webbench_report.txt
+│   ├── pool
+│   ├── processing
+│   ├── readme.md
+│   ├── server
+│   └── timer
 ├── LICENSE
 ├── Makefile
-├── readme.md
-└── README.md
+├── readme.assest
+│   └── 压力测试.png
+├── README.md
+└── webbench-1.5
+    ├── Makefile
+    ├── socket.c
+    ├── tags
+    ├── webbench
+    ├── webbench.c
+    ├── webbench.o
+    └── webbench_report.txt
 
 ```
 ## 项目启动
@@ -66,11 +72,24 @@ create database yourdb;
 
 // 创建user表
 USE yourdb;
-CREATE TABLE user(
-    username char(50) NULL,
-    password char(50) NULL
-)ENGINE=InnoDB;
+CREATE TABLE user (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username CHAR(50) UNIQUE,
+    password CHAR(50)
+) ENGINE=InnoDB;
 
+// 创建文件上传记录表 uploaded_files
+CREATE TABLE uploaded_files (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    original_filename VARCHAR(255),
+    stored_filename VARCHAR(255),
+    file_path VARCHAR(255),
+    file_size INT,
+    upload_time DATETIME,
+    file_type VARCHAR(50),
+    uploader_id INT,
+    FOREIGN KEY (uploader_id) REFERENCES user(id)
+) ENGINE=InnoDB;
 // 添加数据
 INSERT INTO user(username, password) VALUES('name', 'password');
 ```
@@ -100,6 +119,3 @@ https://github.com/markparticle/WebServer.git
 * 将解析HTTP请求的状态机模式从按行分成两部分，读取请求头和请求体，请求头仍保持按行读取不变，请求体则一次读取完毕所有的Content-Length长度，适合多文本格式上传
 * 在response中增加了响应json格式，而不是只响应html文件；包括upload和delete，其中upload会处理请求体，响应upload时将请求体作为写入到本地文件夹中，响应delete时，从本地文件夹删除与文件名相同的文件
 * 修复了HTTP长连接+缓冲区机制下的读取不完全问题。在文件上传功能时，发现从socket中读取数据经常只能读取header，读不了body。修正httpconn::process()逻辑和WebServer::OnRead_()，判断读取不完整时会继续读取。但是会造成性能下降。
-
-## TODO
-* 将上传的文件与原来的文件能在picture.html按照个数战术

@@ -2,7 +2,7 @@
  * @Author: Wang
  * @Date: 2025-02-18 15:02:42
  * @LastEditors: Please set LastEditors
- * @LastEditTime: 2025-04-01 21:50:39
+ * @LastEditTime: 2025-06-10 20:53:25
  * @Description: 请填写简介
 -->
 <!DOCTYPE html>
@@ -10,8 +10,7 @@
 
 <head>
      <meta charset="UTF-8">
-     <title>MARK-欢迎</title>
-     <link rel="icon" href="images/favicon.ico">
+     <title>欢迎</title>
      <link rel="stylesheet" href="css/bootstrap.min.css">
      <link rel="stylesheet" href="css/animate.css">
      <link rel="stylesheet" href="css/magnific-popup.css">
@@ -23,60 +22,44 @@
 
 <body data-spy="scroll" data-target=".navbar-collapse" data-offset="50">
 
-     <!-- PRE LOADER -->
      <div class="preloader">
           <div class="spinner">
                <span class="spinner-rotate"></span>
           </div>
      </div>
 
-
-     <!-- NAVIGATION SECTION -->
      <div class="navbar custom-navbar navbar-fixed-top" role="navigation">
           <div class="container">
-               <div class="navbar-header">
-                    <button class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
-                         <span class="icon icon-bar"></span>
-                         <span class="icon icon-bar"></span>
-                         <span class="icon icon-bar"></span>
-                    </button>
-                    <!-- lOGO TEXT HERE -->
-                    <a href="/" class="navbar-brand">Mark</a>
-               </div>
 
                <div class="collapse navbar-collapse">
                     <ul class="nav navbar-nav navbar-right">
                          <li><a class="smoothScroll" href="/">首页</a></li>
-                         <li><a class="smoothScroll" href="/picture">图片</a></li>
-                         <li><a class="smoothScroll" href="/video">视频</a></li>
-                         <li><a class="smoothScroll" href="/login">登录</a></li>
-                         <li><a class="smoothScroll" href="/register">注测</a></li>
-                         <li><a class="smoothScroll" href="/filelist">上传</a></li>
+                         <li id="navLogin" style="display: none;"><a class="smoothScroll" href="/login">登录</a></li>
+                         <li id="navRegister" style="display: none;"><a class="smoothScroll" href="/register">注册</a></li>
+
+                         <li id="navUpload"><a class="smoothScroll" href="/filelist">上传</a></li>
+                         <li id="navLogout"><a class="smoothScroll" href="/logout">登出</a></li>
                     </ul>
                </div>
-
           </div>
      </div>
-     <!-- HOME SECTION -->
-     <section id="home">
 
+     <section id="home">
           <div class="container">
                <div class="row">
 
-                    <div class="col-md-offset-1 col-md-2 col-sm-3">
-                         <img src="images/profile-image.jpg" class="wow fadeInUp img-responsive img-circle"
-                              data-wow-delay="0.2s" alt="about image">
-                    </div>
 
-                    <div class="col-md-8 col-sm-8">
-                         <h1 class="wow fadeInUp" data-wow-delay="0.6s"> 欢迎您！</h1>
-                         <!-- <a href="#" class="wow fadeInUp btn btn-default section-btn" data-wow-delay="1s">下载简历</a> -->
-                    </div>
+                    <div class="col-md-8 col-sm-8 text-center"> <h1 class="wow fadeInUp" data-wow-delay="0.6s" id="welcomeUserMessage">欢迎您！</h1>
 
+                         <div class="wow fadeInUp" data-wow-delay="1.0s">
+                              <a href="/filelist" class="btn btn-primary btn-lg upload-btn">开始上传文件</a>
+                         </div>
+
+                    </div>
                </div>
           </div>
      </section>
-     <!-- SCRIPTS -->
+
      <script src="js/jquery.js"></script>
      <script src="js/bootstrap.min.js"></script>
      <script src="js/smoothscroll.js"></script>
@@ -84,6 +67,49 @@
      <script src="js/magnific-popup-options.js"></script>
      <script src="js/wow.min.js"></script>
      <script src="js/custom.js"></script>
-</body>
 
+     <script>
+          // 这个脚本现在将管理导航链接的可见性，并根据登录状态定制欢迎信息。
+          function updateUIForLoginStatus() {
+              // 在实际应用中，您会检查会话 cookie 或发起 AJAX 调用到后端端点，
+              // 以确认用户的认证状态。
+              // 为了演示，我们假设 localStorage 在成功登录后存储了用户名。
+              const username = localStorage.getItem('loggedInUser'); // 示例：成功登录后获取
+
+              if (username) {
+                  // 用户已登录
+                  $('#welcomeUserMessage').text(`欢迎您，${username}！`); // 个性化欢迎信息
+                  $('#navLogin').hide(); // 隐藏导航栏的登录链接
+                  $('#navRegister').hide(); // 隐藏导航栏的注册链接
+                  $('#navUpload').show(); // 显示导航栏的上传链接
+                  $('#navLogout').show(); // 显示导航栏的登出链接
+
+                  // 主区域的“开始上传文件”按钮在此登录后页面上始终可见。
+              } else {
+                  // 用户未登录（在此“登录后”页面上不应发生）
+                  // 但最好有一个备用方案
+                  $('#welcomeUserMessage').text('欢迎您！');
+                  $('#navLogin').show();
+                  $('#navRegister').show();
+                  $('#navUpload').hide();
+                  $('#navLogout').hide();
+                  // 如果此页面未找到用户，可以重定向到登录页：
+                  // window.location.href = '/login';
+              }
+          }
+
+          $(document).ready(function() {
+              updateUIForLoginStatus();
+
+              // 登出功能（示例）
+              $('#navLogout a').on('click', function(e) {
+                  e.preventDefault(); // 阻止默认链接行为
+                  // 在实际应用中，这会向您的后端发送请求以销毁会话
+                  localStorage.removeItem('loggedInUser'); // 示例：从本地存储中移除
+                  updateUIForLoginStatus(); // 登出后更新 UI
+                  window.location.href = '/login'; // 登出后重定向到登录页
+              });
+          });
+     </script>
+</body>
 </html>

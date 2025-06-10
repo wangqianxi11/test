@@ -15,18 +15,20 @@
 #include "../buffer/buffer.h"
 #include "../log/log.h"
 #include "httprequest.h"
+#include "../processing/uploadservice.h"
 class HttpResponse {
 public:
     HttpResponse();
     ~HttpResponse();
 
     void Init(const std::string& srcDir, std::string& path, std::string& body, std::unordered_map<std::string,std::string>&header,bool isKeepAlive = false, int code = -1);
-    void MakeResponse(Buffer& buff);
+    void MakeResponse(Buffer& buff, bool isJsonResponse);
     void UnmapFile();
     char* File();
     size_t FileLen() const;
     void ErrorContent(Buffer& buff, std::string message);
     int Code() const { return code_; }
+    void SetJsonResponse(const std::string& body);
 
 private:
     void AddStateLine_(Buffer &buff);
@@ -39,7 +41,8 @@ private:
 
     int code_;
     bool isKeepAlive_;
-
+    bool isJson_;
+    std::string jsonBody_;
     std::string path_;
     std::string srcDir_;
     std::string body_;

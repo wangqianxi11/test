@@ -22,6 +22,7 @@
 #include "../log/log.h"
 #include "../pool/sqlconnpool.h"
 #include "../pool/sqlconnRAII.h"
+#include "../processing/uploaded_file.h"
 
 class HttpRequest {
 public:
@@ -61,14 +62,17 @@ public:
     std::string& body() ;
     std::unordered_map<std::string,std::string>& header();
     bool IsKeepAlive() const;
-
+    void SetUserID(int id) { userID_ = id; }
+    int GetUserID() const { return userID_; }
+    PARSE_STATE state_;
+    std::string method_, path_, version_, body_;
+    std::unordered_map<std::string, std::string> header_;
+    std::unordered_map<std::string, std::string> post_;
     /* 
     todo 
     void HttpConn::ParseFormData() {}
     void HttpConn::ParseJson() {}
     */
-
-private:
     bool ParseRequestLine_(const std::string& line);
     void ParseHeader_(const std::string& line);
     void ParseBody_(const std::string& line,int &fd);
@@ -77,26 +81,25 @@ private:
     void ParseFromUrlencoded_();
     void ParseMultipartForm_(int &fd);
     void getFileList(const std::string& dirPath, std::vector<std::string>& fileList);
+    bool HandleDeleteFile(int user_id);
     void generateFileListPage(const std::string& templatePath, 
         const std::string& outputPath, 
         const std::string& fileDir);
-    void Updatepicturehtml(std::string &filename);
-    bool ParseMultipartFormData(const std::string& contentType, const std::string& body);
+    void Updatepicturehtml(int id);
+    bool ParseMultipartFormData(const std::string& contentType, const std::string& body,UploadedFile& outFile);
     bool ParseChunkedBody_(Buffer& buff);
-    static bool UserVerify(const std::string& name, const std::string& pwd, bool isLogin);
+    bool UserVerify(const std::string& name, const std::string& pwd, bool isLogin);
     void TraverseDirectory(
         const std::string& directory_path,
         std::function<void(const std::string&)> file_handler,
         bool include_hidden = false,
         const std::vector<std::string>& extensions = {});
-    PARSE_STATE state_;
-    std::string method_, path_, version_, body_;
-    std::unordered_map<std::string, std::string> header_;
-    std::unordered_map<std::string, std::string> post_;
 
     static const std::unordered_set<std::string> DEFAULT_HTML;
     static const std::unordered_map<std::string, int> DEFAULT_HTML_TAG;
     static int ConverHex(char ch);
+    int userID_ = -1;
+
 };
 
 

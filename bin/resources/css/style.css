@@ -562,3 +562,100 @@ a:hover, a:active, a:focus {
   }
 
 }
+
+/* 添加到你的 style.css 文件 */
+
+/* 自定义按钮样式 */
+.custom-button {
+  padding: 12px 30px; /* 增加内边距让按钮更大 */
+  font-size: 18px; /* 调整字体大小 */
+  border-radius: 5px; /* 轻微圆角 */
+  transition: all 0.3s ease; /* 添加过渡效果 */
+  text-transform: uppercase; /* 文本大写 */
+  font-weight: bold; /* 字体加粗 */
+  letter-spacing: 1px; /* 字母间距 */
+}
+
+.custom-button:hover {
+  transform: translateY(-2px); /* 鼠标悬停时轻微上浮 */
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* 鼠标悬停时添加阴影 */
+}
+
+/* 针对 Bootstrap 按钮颜色的微调 */
+.btn-primary.custom-button {
+  background-color: #5bc0de; /* Bootstrap info 蓝色 */
+  border-color: #46b8da;
+}
+
+.btn-primary.custom-button:hover {
+  background-color: #31b0d5;
+  border-color: #2a6496;
+}
+
+.btn-success.custom-button {
+  background-color: #5cb85c; /* Bootstrap success 绿色 */
+  border-color: #4cae4c;
+}
+
+.btn-success.custom-button:hover {
+  background-color: #449d44;
+  border-color: #398439;
+}
+
+.btn-info.custom-button {
+  background-color: #4CAF50; /* 自定义绿色，与成功按钮略有区别 */
+  border-color: #4CAF50;
+  color: white;
+}
+.btn-info.custom-button:hover {
+  background-color: #45a049;
+  border-color: #45a049;
+}
+
+
+/* 可以根据需要调整 home section 的布局 */
+#home .col-md-8 {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center; /* 让标题和按钮居中 */
+  text-align: center; /* 文本居中 */
+  min-height: 50vh; /* 确保内容有足够的垂直空间 */
+}
+
+
+
+
+/* 主要区域按钮的通用样式 */
+.upload-btn {
+  padding: 15px 40px; /* 让按钮更大 */
+  font-size: 20px;   /* 字体更大，更显眼 */
+  font-weight: bold; /* 文字加粗 */
+  border-radius: 8px; /* 轻微圆角 */
+  margin-top: 40px;  /* 欢迎信息下方留白 */
+  transition: all 0.3s ease; /* 鼠标悬停效果平滑过渡 */
+  text-transform: uppercase; /* 文本大写，增加冲击力 */
+  letter-spacing: 1.5px; /* 增加字母间距 */
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); /* 细微阴影，增加深度 */
+}
+
+.upload-btn:hover {
+  transform: translateY(-3px); /* 鼠标悬停时按钮轻微上浮 */
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.3); /* 鼠标悬停时阴影更明显 */
+  background-color: #31b0d5; /* 鼠标悬停时变为更深的蓝色 */
+  border-color: #2a6496; /* 鼠标悬停时边框颜色更深 */
+}
+
+/* 可选：为了更好的布局，将列内容居中 */
+#home .col-md-8 {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  min-height: 50vh; /* 确保有足够的垂直空间 */
+}
+
+#home h1 {
+  margin-bottom: 30px; /* 标题和按钮之间增加间距 */
+}

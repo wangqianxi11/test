@@ -17,6 +17,9 @@
 #include "../log/log.h"
 #include "../pool/sqlconnRAII.h"
 #include "../buffer/buffer.h"
+#include "../processing/UserService.h"
+#include "../processing/uploaded_file.h"
+#include "../processing/uploadservice.h"
 #include "httprequest.h"
 #include "httpresponse.h"
 
@@ -30,7 +33,7 @@ public:
     HttpConn();
 
     ~HttpConn();
-
+    bool isJsonResponse = false;
     void init(int sockFd, const sockaddr_in& addr);
 
     ssize_t read(int* saveErrno);
@@ -42,6 +45,11 @@ public:
     int GetFd() const;
 
     int GetPort() const;
+    void RouteRequest();
+    void HandleUserAuth();
+    void HandleUpload();
+    void HandleDelete();
+    string GetFileListJson(const std::string& dirPath);
 
     const char* GetIP() const;
     
