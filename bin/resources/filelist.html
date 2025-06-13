@@ -67,6 +67,10 @@
                     <li class="nav-item">
                         <a class="nav-link active" href="/filelist"><i class="fas fa-list me-1"></i>文件列表</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" id="logoutBtn"><i class="fas fa-sign-out-alt me-1"></i>退出登录</a>
+                    </li>
+
                 </ul>
             </div>
         </div>
@@ -154,7 +158,18 @@
         // 加载文件列表
         async function loadFileList() {
             try {
-                const response = await fetch(`${API_BASE}/showlist`);
+                const response = await fetch(`${API_BASE}/showlist`, {
+                    credentials: 'include' // ✅ 记得带上 cookie
+                });
+
+                if (response.status === 403) {
+                    // ❌ 未登录：跳转或提示
+                    Swal.fire('未登录', '请先登录后再查看文件列表', 'warning').then(() => {
+                        window.location.href = '/login'; // 或跳回首页 '/'
+                    });
+                    return;
+                }
+
                 if (!response.ok) throw new Error('获取文件列表失败');
 
                 const files = await response.json();
@@ -168,6 +183,21 @@
         function renderFileList(files) {
             const tableBody = document.getElementById('fileTable');
             tableBody.innerHTML = '';
+
+            //  加入防御式判断
+            if (!Array.isArray(files)) {
+                console.warn("文件列表不是数组：", files);
+                document.getElementById('fileCount').textContent = 0;
+                tableBody.innerHTML = `
+            <tr>
+                <td colspan="4" class="text-center text-muted py-4">
+                    <i class="fas fa-folder-open fa-2x mb-2"></i><br>
+                    暂无文件
+                </td>
+            </tr>
+        `;
+                return;
+            }
 
             document.getElementById('fileCount').textContent = files.length;
 
@@ -256,8 +286,39 @@
         // 设置事件监听
         function setupEventListeners() {
             // 上传按钮
-            document.getElementById('uploadBtn').addEventListener('click', handleUpload);
+            document.getElementById('uploadBtn').addEventListener('click', async function () {
+                const fileInput = document.getElementById('fileInput');
+                if (!fileInput.files.length) {
+                    alert("请选择文件后再上传！");
+                    return;
+                }
 
+                const formData = new FormData();
+                formData.append("file", fileInput.files[0]);
+
+                try {
+                    const response = await fetch('/upload', {
+                        method: 'POST',
+                        credentials: 'include', // 自动附带 Cookie
+                        body: formData
+                    });
+
+                    if (response.status === 403) {
+                        alert("请先登录后再上传文件！");
+                        return;
+                    }
+
+                    if (response.ok) {
+                        alert("上传成功！");
+                    } else {
+                        const errorText = await response.text();
+                        alert("上传失败：" + errorText);
+                    }
+                } catch (error) {
+                    console.error("上传出错:", error);
+                    alert("网络异常，请稍后重试！");
+                }
+            });
             // 删除按钮（使用事件委托）
             document.getElementById('fileTable').addEventListener('click', function (e) {
                 if (e.target.closest('.delete-btn')) {
@@ -268,6 +329,26 @@
 
             // 确认删除按钮
             document.getElementById('confirmDeleteBtn').addEventListener('click', confirmDelete);
+
+            // 退出登录按钮点击事件
+            document.getElementById('logoutBtn').addEventListener('click', async function (e) {
+                e.preventDefault();  // 阻止默认跳转行为
+
+                try {
+                    const response = await fetch(`${API_BASE}/logout`, {
+                        method: 'GET',  // 你的服务端 logout 是 GET 方法
+                        credentials: 'include'  // 确保带上 Cookie
+                    });
+
+                    if (!response.ok) throw new Error('退出失败');
+
+                    // 成功后跳转登录页面
+                    window.location.href = "/login.html";
+                } catch (error) {
+                    console.error('Logout error:', error);
+                    Swal.fire('错误', '退出登录失败', 'error');
+                }
+            });
         }
 
         // 处理文件上传

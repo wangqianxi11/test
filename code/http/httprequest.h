@@ -64,6 +64,7 @@ public:
     bool IsKeepAlive() const;
     void SetUserID(int id) { userID_ = id; }
     int GetUserID() const { return userID_; }
+    void AddHeader(const std::string& key, const std::string& value);
     PARSE_STATE state_;
     std::string method_, path_, version_, body_;
     std::unordered_map<std::string, std::string> header_;

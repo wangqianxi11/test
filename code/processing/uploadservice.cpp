@@ -2,7 +2,7 @@
  * @Author: Wang
  * @Date: 2025-06-04 10:54:45
  * @LastEditors: Please set LastEditors
- * @LastEditTime: 2025-06-04 21:44:03
+ * @LastEditTime: 2025-06-13 10:08:08
  * @Description: 请填写简介
  */
 #include "uploadservice.h"
@@ -61,40 +61,95 @@ bool UploadService::DeleteFile(const std::string& filename, int user_id) {
     return ok;
 }
 
-std::vector<UploadedFileInfo> UploadService::QueryAllFiles() {
+std::vector<UploadedFileInfo> UploadService::QueryAllFiles(int userId) {
     std::vector<UploadedFileInfo> result;
 
     MYSQL* sql;
-    SqlConnRAII(&sql, SqlConnPool::Instance());  // 获取连接池连接
+    SqlConnRAII(&sql, SqlConnPool::Instance());
 
-    const char* query = 
+    const char* query =
         "SELECT original_filename, stored_filename, file_path, file_size, "
-        "upload_time, file_type, uploader_id FROM uploaded_files ORDER BY upload_time DESC";
+        "upload_time, file_type, uploader_id FROM uploaded_files "
+        "WHERE uploader_id = ? ORDER BY upload_time DESC";
 
-    if (mysql_query(sql, query) != 0) {
-        LOG_ERROR("MySQL 查询失败: %s", mysql_error(sql));
+    MYSQL_STMT* stmt = mysql_stmt_init(sql);
+    if (!stmt || mysql_stmt_prepare(stmt, query, strlen(query)) != 0) {
+        LOG_ERROR("MySQL 预处理失败: %s", mysql_error(sql));
         return result;
     }
 
-    MYSQL_RES* res = mysql_store_result(sql);
-    if (!res) {
-        LOG_ERROR("MySQL 结果存储失败: %s", mysql_error(sql));
+    MYSQL_BIND bind_param{};
+    memset(&bind_param, 0, sizeof(bind_param));
+    bind_param.buffer_type = MYSQL_TYPE_LONG;
+    bind_param.buffer = (char*)&userId;
+
+    if (mysql_stmt_bind_param(stmt, &bind_param) != 0) {
+        LOG_ERROR("MySQL 参数绑定失败: %s", mysql_stmt_error(stmt));
+        mysql_stmt_close(stmt);
         return result;
     }
 
-    MYSQL_ROW row;
-    while ((row = mysql_fetch_row(res)) != nullptr) {
+    if (mysql_stmt_execute(stmt) != 0) {
+        LOG_ERROR("MySQL 执行失败: %s", mysql_stmt_error(stmt));
+        mysql_stmt_close(stmt);
+        return result;
+    }
+
+    MYSQL_RES* prepare_meta_result = mysql_stmt_result_metadata(stmt);
+    if (!prepare_meta_result) {
+        LOG_ERROR("MySQL 获取结果元数据失败: %s", mysql_stmt_error(stmt));
+        mysql_stmt_close(stmt);
+        return result;
+    }
+
+    // 准备接收数据
+    char orig[256], stored[256], path[256], time[64], type[64];
+    int size = 0, uid = 0;
+
+    MYSQL_BIND bind_result[7]{};
+    memset(bind_result, 0, sizeof(bind_result));
+
+    bind_result[0].buffer_type = MYSQL_TYPE_STRING;
+    bind_result[0].buffer = orig;
+    bind_result[0].buffer_length = sizeof(orig);
+
+    bind_result[1].buffer_type = MYSQL_TYPE_STRING;
+    bind_result[1].buffer = stored;
+    bind_result[1].buffer_length = sizeof(stored);
+
+    bind_result[2].buffer_type = MYSQL_TYPE_STRING;
+    bind_result[2].buffer = path;
+    bind_result[2].buffer_length = sizeof(path);
+
+    bind_result[3].buffer_type = MYSQL_TYPE_LONG;
+    bind_result[3].buffer = (char*)&size;
+
+    bind_result[4].buffer_type = MYSQL_TYPE_STRING;
+    bind_result[4].buffer = time;
+    bind_result[4].buffer_length = sizeof(time);
+
+    bind_result[5].buffer_type = MYSQL_TYPE_STRING;
+    bind_result[5].buffer = type;
+    bind_result[5].buffer_length = sizeof(type);
+
+    bind_result[6].buffer_type = MYSQL_TYPE_LONG;
+    bind_result[6].buffer = (char*)&uid;
+
+    mysql_stmt_bind_result(stmt, bind_result);
+
+    while (mysql_stmt_fetch(stmt) == 0) {
         UploadedFileInfo info;
-        info.original_filename = row[0] ? row[0] : "";
-        info.stored_filename   = row[1] ? row[1] : "";
-        info.file_path         = row[2] ? row[2] : "";
-        info.file_size         = row[3] ? std::stoi(row[3]) : 0;
-        info.upload_time       = row[4] ? row[4] : "";
-        info.file_type         = row[5] ? row[5] : "";
-        info.uploader_id       = row[6] ? std::stoi(row[6]) : -1;
+        info.original_filename = orig;
+        info.stored_filename = stored;
+        info.file_path = path;
+        info.file_size = size;
+        info.upload_time = time;
+        info.file_type = type;
+        info.uploader_id = uid;
         result.push_back(info);
     }
 
-    mysql_free_result(res);
+    mysql_free_result(prepare_meta_result);
+    mysql_stmt_close(stmt);
     return result;
 }

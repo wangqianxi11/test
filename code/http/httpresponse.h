@@ -16,6 +16,7 @@
 #include "../log/log.h"
 #include "httprequest.h"
 #include "../processing/uploadservice.h"
+
 class HttpResponse {
 public:
     HttpResponse();
@@ -28,7 +29,8 @@ public:
     size_t FileLen() const;
     void ErrorContent(Buffer& buff, std::string message);
     int Code() const { return code_; }
-    void SetJsonResponse(const std::string& body);
+    void SetJsonResponse(const std::string& jsonStr, int code);
+    void AddHeader(const std::string& key, const std::string& value);
 
 private:
     void AddStateLine_(Buffer &buff);

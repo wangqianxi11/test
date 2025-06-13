@@ -115,6 +115,7 @@ ssize_t HttpConn::write(int* saveErrno) {
 
 HttpConn::PROCESS_STATE HttpConn::process() {
     int fd = GetFd(); // 获取客户端socket，fd
+    isJsonResponse = false;
     // request_.Init(); // HTTP请求初始化
     if(readBuff_.ReadableBytes() <= 0) {
         // 连接异常或空请求
@@ -159,10 +160,22 @@ void HttpConn::RouteRequest() {
     cout<<"path:"<<path.c_str()<<endl;
     if (method == "GET") {
         if (path.find("/showlist") != std::string::npos) {
-            std::string jsonStr = GetFileListJson("./resources/images");
-            response_.SetJsonResponse(jsonStr);  // 自定义设置 JSON 响应体
+            if (!ExtractLoginFromCookie()) {
+                response_.Init(srcDir, request_.path(), request_.body(), request_.header(), false, 403);
+                response_.SetJsonResponse("请先登录后再查看文件列表", 403);
+                isJsonResponse = true;
+                return;
+            }
+        
+            std::string jsonStr = GetSQLFileListJson(); // 已登录，安全查询
+            response_.SetJsonResponse(jsonStr, 200);    // 返回 JSON 列表
             isJsonResponse = true;
-        } else {
+            isJsonResponse = true;
+        }else if (path.find("/logout") != std::string::npos) {
+            HandleLogout();             // 登出入口
+            isJsonResponse = false;
+        } 
+        else {
             response_.Init(srcDir, request_.path(), request_.body(), request_.header(), request_.IsKeepAlive(), 200);
         }
     } else if (method == "POST") {
@@ -170,6 +183,15 @@ void HttpConn::RouteRequest() {
             HandleUserAuth();  // 设置 path_ 和 code_
             isJsonResponse = false;
         } else if (path.find("/upload") == 0) {
+
+            if (!ExtractLoginFromCookie()) {
+                // 未登录，直接返回 403 Forbidden
+                response_.Init(srcDir, request_.path(), request_.body(), request_.header(), false, 403);
+                response_.SetJsonResponse("请先登录后再上传文件",403);
+
+                isJsonResponse = true;
+                return;
+            }
             HandleUpload();  // 处理上传
             isJsonResponse = true;
         }
@@ -192,25 +214,34 @@ void HttpConn::HandleUserAuth() {
 
     int userID;
     if (UserService::Verify(username, password, isLogin, userID)) {
-        request_.SetUserID(userID);  // 记录当前用户ID，后续文件上传等可用
         request_.path() = "/welcome.html";  // 覆盖跳转页面
+        response_.Init(srcDir, request_.path(), request_.body(), request_.header(), request_.IsKeepAlive(), 200);
+        ForceLoginUser(userID);
+        
     } else {
         request_.path() = "/error.html";
+        response_.Init(srcDir, request_.path(), request_.body(), request_.header(), false, 400);
     }
 
-    response_.Init(srcDir, request_.path(), request_.body(), request_.header(), request_.IsKeepAlive(), 200);
+    
 }
 
 void HttpConn::HandleUpload() {
+    cout<<"开始处理上传"<<endl;
+    if (request_.GetUserID() <= 0) {
+        response_.SetJsonResponse(R"({"error":"未登录，禁止上传"})", 403);
+        return;
+    }
+
     UploadedFile file;
     if (request_.ParseMultipartFormData(request_.header()["Content-Type"], request_.body(), file)) {
         if (UploadService::SaveUploadedFile(file, request_.GetUserID())) {
-            response_.Init(srcDir, request_.path(), request_.body(), request_.header(), request_.IsKeepAlive(), 200);
+            response_.SetJsonResponse(R"({"status":"success"})", 200);
         } else {
-            response_.Init(srcDir, request_.path(), request_.body(), request_.header(), false, 400);
+            response_.SetJsonResponse(R"({"error":"保存失败"})", 500);
         }
     } else {
-        response_.Init(srcDir, request_.path(), request_.body(), request_.header(), false, 400);
+        response_.SetJsonResponse(R"({"error":"上传数据解析失败"})", 400);
     }
 }
 
@@ -225,23 +256,114 @@ void HttpConn::HandleDelete() {
     }
 }
 
-string HttpConn::GetFileListJson(const std::string& dirPath) {
-    vector<std::string> files;
-    DIR* dir = opendir(dirPath.c_str());
-    struct dirent* ent;
+string HttpConn::GetSQLFileListJson() {
+    cout<<"数据库中读取文件信息"<<endl;
+    nlohmann::json jsonResponse;
 
-    if (dir != nullptr) {
-        while ((ent = readdir(dir)) != nullptr) {
-            std::string name = ent->d_name;
-            if (name != "." && name != ".." && name != ".DS_Store") {
-                files.push_back(name);
-            }
-        }
-        closedir(dir);
+    int currentUserId = request_.GetUserID();
+    if (currentUserId <= 0) {
+        std::cout << "未登录用户尝试获取文件列表" << std::endl;
+        return R"({"error": "未登录"})";  // 保险：不应该到这一步
     }
 
-    // 转为 JSON 数组
-    nlohmann::json j = files;
-    return j.dump();  // 返回 JSON 字符串
+    // 只查询当前用户的文件
+    std::vector<UploadedFileInfo> fileInfos = UploadService::QueryAllFiles(currentUserId);
+
+    // 将每个文件信息转换为 JSON 格式
+    for (const auto& file : fileInfos) {
+        nlohmann::json fileJson;
+        fileJson["filename"] = file.original_filename;
+        fileJson["upload_time"] = file.upload_time;
+        fileJson["user_id"] = file.uploader_id;
+        fileJson["size"] = file.file_size;
+        jsonResponse.push_back(fileJson);
+    }
+
+    std::string jsonStr = jsonResponse.dump();
+    cout<<jsonStr<<endl;
+    return jsonStr; 
 }
 
+bool HttpConn::ExtractLoginFromCookie() {
+    std::cout << "⏳ 正在进行 Cookie 验证..." << std::endl;
+
+    auto it = request_.header().find("Cookie");
+    if (it == request_.header().end()) {
+        std::cout << "❌ 没有 Cookie 请求头，用户未登录。" << std::endl;
+        return false;
+    }
+
+    std::string rawCookie = it->second;
+    std::cout << "✅ 收到 Cookie: " << rawCookie << std::endl;
+
+    std::string token = ParseTokenFromCookie(rawCookie);
+    if (token.empty()) {
+        std::cout << "❌ Cookie 中未找到 token。" << std::endl;
+        return false;
+    }
+
+    std::cout << "🔑 提取的 token: " << token << std::endl;
+
+    int userID = RedisSessionManager().GetUserID(token);
+    if (userID > 0) {
+        request_.SetUserID(userID);
+        std::cout << "✅ 登录验证成功，userID = " << userID << std::endl;
+        RedisSessionManager().RefreshSessionTTL(token);
+        return true;
+    }
+
+    std::cout << "❌ token 无效，无法匹配 Redis 中的用户。" << std::endl;
+    return false;
+}
+
+string HttpConn::ParseTokenFromCookie(const std::string& cookieStr) {
+    std::istringstream ss(cookieStr);
+    std::string item;
+    while (std::getline(ss, item, ';')) {
+        // 去除前导空格
+        size_t start = item.find_first_not_of(" ");
+        if (start == std::string::npos) continue;
+        item = item.substr(start);
+
+        // 查找 token= 开头
+        if (item.find("token=") == 0) {
+            return item.substr(strlen("token="));  // 提取等号后面的 token 值
+        }
+    }
+    return "";  // 没有找到 token
+}
+
+void HttpConn::HandleLogout() {
+    std::string cookie = request_.header()["Cookie"];
+    std::string token = ParseTokenFromCookie(cookie);
+    RedisSessionManager().DeleteSession(token);
+    request_.path_ = "/login.html";
+    response_.Init(srcDir, request_.path(), request_.body(), request_.header(), false, 200);
+    response_.AddHeader("Set-Cookie", "token=; Max-Age=0; Path=/; HttpOnly");
+}
+
+bool HttpConn::IsStaticResource(const std::string& path) {
+    static const std::vector<std::string> exts = {
+        ".js", ".css", ".html", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".woff", ".ttf", ".ico"
+    };
+    for (const auto& ext : exts) {
+        if (path.size() >= ext.size() &&
+            path.compare(path.size() - ext.size(), ext.size(), ext) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void HttpConn::ForceLoginUser(int userID) {
+    cout<<"设置token"<<endl;
+    // 清除旧 cookie
+    response_.AddHeader("Set-Cookie", "token=; Path=/; Max-Age=0; HttpOnly");
+
+    // 设置新 cookie
+    std::string token = RedisSessionManager().CreateSession(userID, 3600);
+    cout<<"token:"<<token<<endl;
+    response_.AddHeader("Set-Cookie", "token=" + token + "; Path=/; HttpOnly");
+
+    request_.SetUserID(userID);
+}

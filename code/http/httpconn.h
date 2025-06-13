@@ -1,5 +1,5 @@
 /*
- * @Author       : mark
+ * @Author       : wang
  * @Date         : 2020-06-15
  * @copyleft Apache 2.0
  */ 
@@ -20,6 +20,8 @@
 #include "../processing/UserService.h"
 #include "../processing/uploaded_file.h"
 #include "../processing/uploadservice.h"
+
+#include "../processing/RedisSessionManager .h"
 #include "httprequest.h"
 #include "httpresponse.h"
 
@@ -49,8 +51,12 @@ public:
     void HandleUserAuth();
     void HandleUpload();
     void HandleDelete();
-    string GetFileListJson(const std::string& dirPath);
-
+    void ForceLoginUser(int userID);
+    string GetSQLFileListJson();
+    bool ExtractLoginFromCookie();
+    string ParseTokenFromCookie(const std::string& cookieStr);
+    bool IsStaticResource(const std::string& path);
+    void HandleLogout();
     const char* GetIP() const;
     
     sockaddr_in GetAddr() const;

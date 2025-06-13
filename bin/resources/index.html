@@ -53,12 +53,10 @@
                          <div id="authButtons" class="wow fadeInUp" data-wow-delay="1.0s" style="margin-top: 30px;">
                               <a href="/login" class="btn btn-primary custom-button">登录</a>
                               <a href="/register" class="btn btn-success custom-button" style="margin-left: 20px;">注册</a>
+                              <a href="/filelist" class="btn btn-success custom-button" style="margin-left: 20px;">前往上传</a>
+                              
                          </div>
-
-                         <div id="loggedInUploadButton" class="wow fadeInUp" data-wow-delay="1.0s" style="margin-top: 30px; display: none;">
-                             <a href="/filelist" class="btn btn-info custom-button">前往上传</a>
-                         </div>
-
+                     
                     </div>
                </div>
           </div>
@@ -120,6 +118,45 @@
               });
           });
      </script>
+     <script>
+          $(document).ready(function () {
+              $('#uploadBtn').on('click', function () {
+                  // 这里可以构造你需要传给 /upload 的 JSON 内容
+                  const data = {
+                      filename: "example.txt",
+                      content: "base64encodedcontent" // 或其他必要字段
+                  };
+      
+                  fetch("/upload", {
+                      method: "POST",
+                      headers: {
+                          "Content-Type": "application/json",
+                          "Cookie": document.cookie // cookie 会自动附带
+                      },
+                      body: JSON.stringify(data),
+                      credentials: "include"
+                  })
+                  .then(response => {
+                      if (response.status === 403) {
+                          alert("请先登录再上传！");
+                      } else if (response.ok) {
+                          return response.json();
+                      } else {
+                          alert("上传失败！");
+                      }
+                  })
+                  .then(json => {
+                      if (json) {
+                          alert("上传成功: " + JSON.stringify(json));
+                      }
+                  })
+                  .catch(error => {
+                      console.error("Upload error:", error);
+                      alert("请求异常");
+                  });
+              });
+          });
+      </script>
 </body>
 </html>
 

@@ -2,7 +2,7 @@
  * @Author: Wang
  * @Date: 2025-06-04 10:54:13
  * @LastEditors: Please set LastEditors
- * @LastEditTime: 2025-06-04 21:43:53
+ * @LastEditTime: 2025-06-13 10:08:05
  * @Description: 请填写简介
  */
 #pragma once
@@ -23,5 +23,5 @@ class UploadService {
 public:
     static bool SaveUploadedFile(const UploadedFile& file, int user_id);
     static bool DeleteFile(const std::string& filename, int user_id); 
-    static std::vector<UploadedFileInfo> QueryAllFiles();
+    static std::vector<UploadedFileInfo> QueryAllFiles(int userId);
 };

@@ -8,7 +8,7 @@ using namespace std;
 
 const unordered_set<string> HttpRequest::DEFAULT_HTML{
             "/index", "/register", "/login",
-             "/welcome", "/video", "/picture", "/filelist","/upload","/showlist"};
+             "/welcome", "/video", "/picture", "/filelist","/upload","/showlist","logout"};
 
 const unordered_map<string, int> HttpRequest::DEFAULT_HTML_TAG {
             {"/register.html", 0}, {"/login.html", 1},  {"/filelist.html" ,2},{"/upload",3}};
@@ -247,6 +247,7 @@ void HttpRequest::ParseFromUrlencoded_() {
 }
 
 bool HttpRequest::ParseMultipartFormData(const std::string& contentType, const std::string& body,UploadedFile& outFile) {
+    cout<<"解析文件并上传"<<endl;
     const std::string boundaryKey = "boundary=";
     size_t pos = contentType.find(boundaryKey);
     if (pos == std::string::npos) {
@@ -309,6 +310,7 @@ bool HttpRequest::ParseMultipartFormData(const std::string& contentType, const s
         if (content.size() >= 2 && content.substr(content.size() - 2) == "\r\n") {
             content = content.substr(0, content.size() - 2);
         }
+        cout<<"文件名:"<<filename<<endl;
 
         // 设置结果
         outFile.filename = filename;
@@ -442,5 +444,9 @@ void HttpRequest::Updatepicturehtml(int user_id){
     SqlConnPool::Instance()->FreeConn(sql);
 
 
-    std::cout << "✅ 已根据用户 MySQL 数据更新 HTML 页面" << std::endl;
+    std::cout << "已根据用户 MySQL 数据更新 HTML 页面" << std::endl;
+}
+
+void HttpRequest::AddHeader(const std::string& key, const std::string& value) {
+    header_[key] = value;
 }
