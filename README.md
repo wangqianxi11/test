@@ -2,13 +2,13 @@
  * @Author: Wang
  * @Date: 2025-04-16 15:18:20
  * @LastEditors: Please set LastEditors
- * @LastEditTime: 2025-06-13 11:14:46
+ * @LastEditTime: 2025-06-19 20:34:06
  * @Description: 请填写简介
 -->
 # 基于Linux的WebServer项目
 使用C++实现了一个简单的webserver服务器，具有请求静态文件（html）和多文本格式上传功能、同时使用了Mysql管理实现用户登录、注册以及文件管理，使用redis实现用户登录状态保存和验证
 ## 功能
- *  多路复用与高并发处理：基于Reactor模式和epoll实现I/O多路复用，主线程=
+*  多路复用与高并发处理：基于Reactor模式和epoll实现I/O多路复用，主线程=
 监听事件，子线程池处理业务逻辑，实现数千级并发连接处理。
 *  完整HTTP协议栈支持：自研状态机与正则解析器，支持HTTP/1.1请求解析、
 静态文件响应、多格式multipart/form-data文件上传。
@@ -120,7 +120,8 @@ ab -n 1000 -c 1000 http://ip:port/
 ./webbench-1.5/webbench -c 100 -t 10 http://ip:port/
 ./webbench-1.5/webbench -c 1000 -t 10 http://ip:port/
 ```
-QPS只能达到1000+
+关闭日志存储，请求静态文件,QPS能达到3000+
+![alt text](ceshi.png)
 
 ## 致谢
 https://github.com/markparticle/WebServer.git

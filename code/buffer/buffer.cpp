@@ -126,39 +126,82 @@ void Buffer::EnsureWriteable(size_t len) {
 //     return len;
 // }
 
+// ssize_t Buffer::ReadFd(int fd, int* saveErrno) {
+//     // 确保有足够空间来读取数据，至少 64KB
+//     MakeSpace_(65536);
+    
+//     struct iovec iov;
+//     iov.iov_base = BeginPtr_() + writePos_;
+//     iov.iov_len = WritableBytes();
+//     std::cout<<"buff中剩余的空间:"<<WritableBytes()<<endl;
+//     ssize_t totalRead = 0;
+    
+//     // 循环读取数据，直到没有更多数据可读
+//     while (iov.iov_len > 0) {
+//         ssize_t len = readv(fd, &iov, 1);
+        
+//         if (len < 0) {
+//             *saveErrno = errno;
+//             std::cout << "len<0 ReadFd读取了" << totalRead << "长度" << std::endl;
+//             return totalRead > 0 ? totalRead : -1; // 读取过的部分返回
+//         } else if (len == 0) {
+//             // 文件结束
+//             break;
+//         }
+        
+//         // 更新写入位置，记录读取的总字节数
+//         writePos_ += len;
+//         totalRead += len;
+        
+//         // 继续尝试读取剩余部分
+//         iov.iov_base = BeginPtr_() + writePos_;
+//         iov.iov_len = WritableBytes();
+        
+//     }
+//     std::cout << "ReadFd读取了" << totalRead << "长度" << std::endl;
+//     return totalRead;
+// }
+
 ssize_t Buffer::ReadFd(int fd, int* saveErrno) {
-    // 确保有足够空间来读取数据，至少 64KB
-    MakeSpace_(65536);
-    
-    struct iovec iov;
-    iov.iov_base = BeginPtr_() + writePos_;
-    iov.iov_len = WritableBytes();
-    std::cout<<"buff中剩余的空间:"<<WritableBytes()<<endl;
+    char extraBuf[65536];  // 临时额外缓冲区
     ssize_t totalRead = 0;
-    
-    // 循环读取数据，直到没有更多数据可读
-    while (iov.iov_len > 0) {
-        ssize_t len = readv(fd, &iov, 1);
-        
+
+    while (true) {
+        // 确保主缓冲区有空间
+        MakeSpace_(65536);  // 视情况动态扩容
+        size_t writable = WritableBytes();
+
+        // 构建 iovec 向量：主缓冲区 + 额外缓冲区
+        struct iovec iov[2];
+        iov[0].iov_base = BeginPtr_() + writePos_;
+        iov[0].iov_len = writable;
+        iov[1].iov_base = extraBuf;
+        iov[1].iov_len = sizeof(extraBuf);
+
+        // 使用 readv 读取尽可能多的数据
+        ssize_t len = readv(fd, iov, 2);
         if (len < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                // 非阻塞下无更多数据可读，结束循环
+                break;
+            }
             *saveErrno = errno;
-            return totalRead > 0 ? totalRead : -1; // 读取过的部分返回
-            std::cout << "len<0 ReadFd读取了" << totalRead << "长度" << std::endl;
+            return totalRead > 0 ? totalRead : -1;
         } else if (len == 0) {
-            // 文件结束
+            // EOF，对端关闭连接
             break;
+        } else if (len <= static_cast<ssize_t>(writable)) {
+            // 数据完全写入主缓冲区
+            writePos_ += len;
+        } else {
+            // 主缓冲区写满，剩余写入 extraBuf
+            writePos_ += writable;
+            Append(extraBuf, len - writable);  // 将剩余数据追加到主缓冲区
         }
-        
-        // 更新写入位置，记录读取的总字节数
-        writePos_ += len;
+
         totalRead += len;
-        
-        // 继续尝试读取剩余部分
-        iov.iov_base = BeginPtr_() + writePos_;
-        iov.iov_len = WritableBytes();
-        
     }
-    std::cout << "ReadFd读取了" << totalRead << "长度" << std::endl;
+
     return totalRead;
 }
 

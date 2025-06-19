@@ -141,24 +141,44 @@ void WebServer::AddClient_(int fd, sockaddr_in addr) {
     LOG_INFO("Client[%d] in!", users_[fd].GetFd());
 }
 
+
+
 void WebServer::DealListen_() {
-    /*
-    @description: 接受新连接并在epoll中注册监听读事件
-    流程：客户端accept---> AddClient_ 
-    */
     struct sockaddr_in addr;
-    socklen_t len = sizeof(addr); // 接收客户端的地址信息
-    do {
-        int fd = accept(listenFd_, (struct sockaddr *)&addr, &len); // 接收新的连接，listenFd_是服务器监听的socket fd，返回的fd是客户端连接的socket fd
-        if(fd <= 0) { return;}
-        else if(HttpConn::userCount >= MAX_FD) { // 设置最大连接数
-            SendError_(fd, "Server busy!");
-            LOG_WARN("Clients is full!");
-            return;
+    socklen_t len = sizeof(addr);
+
+    while (true) {
+        int fd = accept(listenFd_, (struct sockaddr*)&addr, &len);
+        if (fd < 0) {
+            int tmpErr = errno;
+            if (tmpErr == EAGAIN || tmpErr == EWOULDBLOCK) {
+                // 所有连接已 accept 完毕（ET 模式下必须循环）
+                break;
+            }
+            else if (tmpErr == EMFILE || tmpErr == ENFILE) {
+                // 文件描述符耗尽，无法再创建 socket
+                LOG_ERROR("accept error: too many open files (errno=%d)", tmpErr);
+            }
+            else {
+                // 其他错误，记录日志
+                LOG_ERROR("accept error (errno=%d): %s", tmpErr, strerror(tmpErr));
+            }
+            break;
         }
+
+        // 超出最大连接数
+        if (HttpConn::userCount >= MAX_FD) {
+            SendError_(fd, "Server busy!");
+            LOG_WARN("Clients are full! Reject client[%d]", fd);
+            close(fd);
+            continue;
+        }
+
+        // 接受成功，注册客户端 socket
         AddClient_(fd, addr);
-    } while(listenEvent_ & EPOLLET);
+    }
 }
+
 
 // 处理读事件
 void WebServer::DealRead_(HttpConn* client) {
@@ -201,12 +221,6 @@ void WebServer::OnRead_(HttpConn* client) {
 }
 
 void WebServer::OnProcess(HttpConn* client) {
-    // if(client->process()) {
-    //     epoller_->ModFd(client->GetFd(), connEvent_ | EPOLLOUT);
-    // } else {
-    //     epoller_->ModFd(client->GetFd(), connEvent_ | EPOLLIN);
-    // }
-
     HttpConn:: PROCESS_STATE state = client->process();
     int fd = client->GetFd();
 
@@ -295,7 +309,7 @@ bool WebServer::InitSocket_() {
     }
 
     // 监听
-    ret = listen(listenFd_, 6);
+    ret = listen(listenFd_, 1024);
     if(ret < 0) {
         LOG_ERROR("Listen port:%d error!", port_);
         close(listenFd_);

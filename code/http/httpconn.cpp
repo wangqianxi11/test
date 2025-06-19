@@ -61,23 +61,47 @@ int HttpConn::GetPort() const {
 }
 
 
-ssize_t HttpConn::read(int* saveErrno) {
-    ssize_t len = -1;
-    ssize_t totalLen = 0;
+// ssize_t HttpConn::read(int* saveErrno) {
+//     ssize_t len = -1;
+//     ssize_t totalLen = 0;
     
-    // 只读取一次数据，不使用 do-while 循环
-    len = readBuff_.ReadFd(fd_, saveErrno);
-    if (len > 0) {
+//     // 只读取一次数据，不使用 do-while 循环
+//     len = readBuff_.ReadFd(fd_, saveErrno);
+//     if (len > 0) {
+//         totalLen += len;
+//     }
+    
+//     // 在 ET 模式下，只有有数据才返回
+//     if (totalLen > 0) {
+//         std::cout << "http连接读取了 " << totalLen << " 字节" << std::endl;
+//         return totalLen;
+//     }
+    
+//     // 没有读取到数据或错误时返回
+//     return totalLen;
+// }
+
+ssize_t HttpConn::read(int* saveErrno) {
+    ssize_t len = 0;
+    ssize_t totalLen = 0;
+
+    while (true) {
+        len = readBuff_.ReadFd(fd_, saveErrno);
+        if (len < 0) {
+            if (*saveErrno == EAGAIN || *saveErrno == EWOULDBLOCK) {
+                break;  // 数据读完，正常退出
+            }
+            return -1;  // 出错
+        } else if (len == 0) {
+            break;  // 对端关闭连接
+        }
         totalLen += len;
     }
-    
-    // 在 ET 模式下，只有有数据才返回
+
     if (totalLen > 0) {
         std::cout << "http连接读取了 " << totalLen << " 字节" << std::endl;
-        return totalLen;
     }
-    
-    // 没有读取到数据或错误时返回
+
     return totalLen;
 }
 
@@ -285,34 +309,34 @@ string HttpConn::GetSQLFileListJson() {
 }
 
 bool HttpConn::ExtractLoginFromCookie() {
-    std::cout << "⏳ 正在进行 Cookie 验证..." << std::endl;
+    std::cout << "正在进行 Cookie 验证..." << std::endl;
 
     auto it = request_.header().find("Cookie");
     if (it == request_.header().end()) {
-        std::cout << "❌ 没有 Cookie 请求头，用户未登录。" << std::endl;
+        std::cout << "没有 Cookie 请求头，用户未登录。" << std::endl;
         return false;
     }
 
     std::string rawCookie = it->second;
-    std::cout << "✅ 收到 Cookie: " << rawCookie << std::endl;
+    std::cout << "收到 Cookie: " << rawCookie << std::endl;
 
     std::string token = ParseTokenFromCookie(rawCookie);
     if (token.empty()) {
-        std::cout << "❌ Cookie 中未找到 token。" << std::endl;
+        std::cout << "Cookie 中未找到 token。" << std::endl;
         return false;
     }
 
-    std::cout << "🔑 提取的 token: " << token << std::endl;
+    std::cout << "提取的 token: " << token << std::endl;
 
     int userID = RedisSessionManager().GetUserID(token);
     if (userID > 0) {
         request_.SetUserID(userID);
-        std::cout << "✅ 登录验证成功，userID = " << userID << std::endl;
+        std::cout << "登录验证成功，userID = " << userID << std::endl;
         RedisSessionManager().RefreshSessionTTL(token);
         return true;
     }
 
-    std::cout << "❌ token 无效，无法匹配 Redis 中的用户。" << std::endl;
+    std::cout << "token 无效，无法匹配 Redis 中的用户。" << std::endl;
     return false;
 }
 
