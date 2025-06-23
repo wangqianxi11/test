@@ -1,55 +1,75 @@
 /*
  * @Author: Wang
  * @Date: 2025-06-04 10:35:05
- * @LastEditors: Please set LastEditors
- * @LastEditTime: 2025-06-04 11:25:39
- * @Description: 请填写简介
+ * @LastEditors: 
+ * @LastEditTime: 2025-06-23 20:32:38
+ * @Description: 
  */
+#include "UserService.h"
+#include "../pool/sqlconnRAII.h"  // 你项目中的连接池封装
+#include <mysql/mysql.h>
+#include <cstring>
 
- #include "UserService.h"
-
-
-bool UserService::Verify(const std::string& name, const std::string& pwd, bool isLogin, int& userID) {
-    if (name.empty() || pwd.empty()) return false;
-    
+bool UserService::UserExists(const std::string& username) {
     MYSQL* sql;
-    SqlConnRAII(&sql, SqlConnPool::Instance());
+    SqlConnRAII conn(&sql, SqlConnPool::Instance());
 
-    char query[512];
-    MYSQL_RES* res = nullptr;
-    MYSQL_ROW row;
+    char esc_name[100];
+    mysql_real_escape_string(sql, esc_name, username.c_str(), username.length());
 
-    char esc_name[100], esc_pwd[100];
-    mysql_real_escape_string(sql, esc_name, name.c_str(), name.length());
-    mysql_real_escape_string(sql, esc_pwd, pwd.c_str(), pwd.length());
+    char query[256];
+    snprintf(query, sizeof(query),
+             "SELECT 1 FROM user WHERE username='%s' LIMIT 1", esc_name);
 
+    if (mysql_query(sql, query)) return false;
+    MYSQL_RES* res = mysql_store_result(sql);
+    bool exists = (mysql_num_rows(res) > 0);
+    mysql_free_result(res);
+    return exists;
+}
+
+bool UserService::GetUserPasswordHash(const std::string& username, std::string& hash, int& userID) {
+    MYSQL* sql;
+    SqlConnRAII conn(&sql, SqlConnPool::Instance());
+
+    char esc_name[100];
+    mysql_real_escape_string(sql, esc_name, username.c_str(), username.length());
+
+    char query[256];
     snprintf(query, sizeof(query),
              "SELECT id, password FROM user WHERE username='%s' LIMIT 1", esc_name);
 
     if (mysql_query(sql, query)) return false;
-    res = mysql_store_result(sql);
+    MYSQL_RES* res = mysql_store_result(sql);
     if (!res) return false;
 
-    bool verified = false;
-    if ((row = mysql_fetch_row(res))) {
-        std::string db_pwd = row[1];
-        userID = atoi(row[0]);
-
-        if (isLogin && db_pwd == pwd) {
-            verified = true;
-        }
-    } else if (!isLogin) {
-        snprintf(query, sizeof(query),
-                 "INSERT INTO user(username, password) VALUES('%s', '%s')", esc_name, esc_pwd);
-
-        if (!mysql_query(sql, query)) {
-            userID = mysql_insert_id(sql);
-            verified = true;
-        }
+    MYSQL_ROW row = mysql_fetch_row(res);
+    if (!row) {
+        mysql_free_result(res);
+        return false;
     }
 
+    userID = std::stoi(row[0]);
+    hash = row[1];
     mysql_free_result(res);
-    cout<<"验证完毕！"<<endl;
-    SqlConnPool::Instance()->FreeConn(sql);
-    return verified;
+    return true;
+}
+
+bool UserService::InsertNewUser(const std::string& username, const std::string& hash, int& userID) {
+    MYSQL* sql;
+    SqlConnRAII conn(&sql, SqlConnPool::Instance());
+
+    char esc_name[100], esc_hash[256];
+    mysql_real_escape_string(sql, esc_name, username.c_str(), username.length());
+    mysql_real_escape_string(sql, esc_hash, hash.c_str(), hash.length());
+
+    char query[512];
+    snprintf(query, sizeof(query),
+             "INSERT INTO user(username, password) VALUES('%s', '%s')",
+             esc_name, esc_hash);
+
+    if (mysql_query(sql, query)) return false;
+
+    userID = mysql_insert_id(sql);
+    return true;
 }

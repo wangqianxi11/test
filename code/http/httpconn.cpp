@@ -15,6 +15,8 @@ HttpConn::HttpConn() {
     fd_ = -1;
     addr_ = { 0 };
     isClose_ = true;
+    redis_ = std::make_shared<sw::redis::Redis>("tcp://127.0.0.1:6379");
+    authService_ = std::make_unique<AuthService>(redis_);
 };
 
 // 析构函数，关闭连接
@@ -61,25 +63,6 @@ int HttpConn::GetPort() const {
 }
 
 
-// ssize_t HttpConn::read(int* saveErrno) {
-//     ssize_t len = -1;
-//     ssize_t totalLen = 0;
-    
-//     // 只读取一次数据，不使用 do-while 循环
-//     len = readBuff_.ReadFd(fd_, saveErrno);
-//     if (len > 0) {
-//         totalLen += len;
-//     }
-    
-//     // 在 ET 模式下，只有有数据才返回
-//     if (totalLen > 0) {
-//         std::cout << "http连接读取了 " << totalLen << " 字节" << std::endl;
-//         return totalLen;
-//     }
-    
-//     // 没有读取到数据或错误时返回
-//     return totalLen;
-// }
 
 ssize_t HttpConn::read(int* saveErrno) {
     ssize_t len = 0;
@@ -229,25 +212,39 @@ void HttpConn::RouteRequest() {
 
 
 void HttpConn::HandleUserAuth() {
-    cout<<"开始处理验证和注册任务...."<<endl;
-    bool isLogin = (request_.path().find("/login") == 0);
+    std::cout << "开始处理验证和注册任务...." << std::endl;
+
+    bool isLogin = (request_.path().find("/login") != std::string::npos);
     const std::string& username = request_.GetPost("username");
     const std::string& password = request_.GetPost("password");
-    cout<<"username:"<<username.c_str()<<endl;
-    cout<<"password:"<<password.c_str()<<endl;
+
+    std::cout << "username: " << username << std::endl;
+    std::cout << "password: " << password << std::endl;
 
     int userID;
-    if (UserService::Verify(username, password, isLogin, userID)) {
-        request_.path() = "/welcome.html";  // 覆盖跳转页面
+    std::string token;
+    bool success = false;
+
+    if (isLogin) {
+        success = authService_->Login(username, password, token, userID);
+    } else {
+        success = authService_->Register(username, password, userID);
+    }
+
+    if (success) {
+        if (isLogin) {
+            // 登录成功 → 欢迎页面
+            request_.path() = "/welcome.html";
+        } else {
+            // 注册成功 → 回到登录页面（可以在页面上提示“注册成功，请登录”）
+            request_.path() = "/login.html";
+        }
         response_.Init(srcDir, request_.path(), request_.body(), request_.header(), request_.IsKeepAlive(), 200);
         ForceLoginUser(userID);
-        
     } else {
         request_.path() = "/error.html";
         response_.Init(srcDir, request_.path(), request_.body(), request_.header(), false, 400);
     }
-
-    
 }
 
 void HttpConn::HandleUpload() {
@@ -328,11 +325,10 @@ bool HttpConn::ExtractLoginFromCookie() {
 
     std::cout << "提取的 token: " << token << std::endl;
 
-    int userID = RedisSessionManager().GetUserID(token);
-    if (userID > 0) {
+    int userID = 0;
+    if (authService_ && authService_->VerifyToken(token, userID)) {
         request_.SetUserID(userID);
         std::cout << "登录验证成功，userID = " << userID << std::endl;
-        RedisSessionManager().RefreshSessionTTL(token);
         return true;
     }
 

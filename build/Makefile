@@ -9,7 +9,7 @@ OBJS = ../code/log/*.cpp ../code/pool/*.cpp ../code/timer/*.cpp \
        ../code/buffer/*.cpp ../code/main.cpp
 
 all: $(OBJS)
-	$(CXX) $(CFLAGS) $(OBJS) -o ../bin/$(TARGET)  -lpthread -lmysqlclient -lcpprest -lssl -lcrypto -lhiredis -lredis++
+	$(CXX) $(CFLAGS) $(OBJS) -o ../bin/$(TARGET)  -lpthread -lmysqlclient -lcpprest -lssl -lcrypto -lhiredis -lredis++ -lbcrypt
 
 clean:
 	rm -rf ../bin/$(OBJS) $(TARGET)

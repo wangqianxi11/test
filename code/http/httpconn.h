@@ -18,6 +18,7 @@
 #include "../pool/sqlconnRAII.h"
 #include "../buffer/buffer.h"
 #include "../processing/UserService.h"
+#include "../processing/AuthService.h"
 #include "../processing/uploaded_file.h"
 #include "../processing/uploadservice.h"
 
@@ -90,6 +91,9 @@ private:
 
     HttpRequest request_;
     HttpResponse response_;
+
+    std::shared_ptr<sw::redis::Redis> redis_;
+    std::unique_ptr<AuthService> authService_;
 };
 
 
